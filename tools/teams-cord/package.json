@@ -1,0 +1,47 @@
+{
+  "name": "teams-cord",
+  "version": "0.1.0",
+  "description": "Microsoft Teams harness for Claude Code. Thread-based conversations, interactive elements, works anywhere you already run Claude.",
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "teams-cord": "./bin/teams-cord.mjs"
+  },
+  "main": "./dist/index.js",
+  "exports": {
+    ".": "./dist/index.js",
+    "./bot": "./dist/bot.js",
+    "./worker": "./dist/worker.js",
+    "./http": "./dist/http.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "node ./bin/teams-cord.mjs start",
+    "start:bun": "bun ./src/index.ts start",
+    "bot": "node ./bin/teams-cord.mjs bot",
+    "worker": "node ./bin/teams-cord.mjs worker",
+    "http": "node ./bin/teams-cord.mjs http",
+    "health": "node ./bin/teams-cord.mjs health"
+  },
+  "dependencies": {
+    "better-sqlite3": "11.3.0",
+    "bullmq": "5.21.2",
+    "commander": "12.1.0",
+    "dotenv": "16.4.5",
+    "express": "5.0.1",
+    "ioredis": "5.4.1",
+    "jsonwebtoken": "9.0.2",
+    "jwks-rsa": "3.1.0",
+    "undici": "6.21.0"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "7.6.11",
+    "@types/express": "5.0.0",
+    "@types/jsonwebtoken": "9.0.7",
+    "@types/node": "22.7.5",
+    "typescript": "5.6.3"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
