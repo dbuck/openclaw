@@ -139,7 +139,11 @@ Already wired end-to-end:
 
 Before production:
 
+- [ ] **Promote streaming to Teams' first-class protocol.** `src/streaming-message.ts` currently uses plain `updateActivity` edits (debounced to 1500 ms). The msteams reference uses `streaminfo` entities (`streamType: streaming/final`, `streamId`, `streamSequence`) for a smoother render and to avoid the "Edited" badge — see `extensions/msteams/src/streaming-message.ts:TeamsHttpStream`.
 - [ ] File-consent invoke handshake for personal-scope (1:1) DM uploads — channel-scope works as-is.
+- [ ] Handle `conversationUpdate` (welcome card when added to a chat/team) and `messageReaction` (cord uses ✅ for "done"; Teams has the same shape via `reactionsAdded`).
+- [ ] Channel-thread `;messageid=` parsing when we extend file uploads to channel threads (only matters for Graph chat lookups, not Bot Framework sends).
+- [ ] Other invoke names (signin/verify, file consent, messaging extensions) — `bot.ts` currently only sends a structured response for `adaptiveCard/action`; everything else gets a bare 200.
 - [ ] Split BullMQ Queue / Worker `IORedis` connections (`maxRetriesPerRequest: null` only needs to be set on the worker side).
 - [ ] Tests + `.github/workflows/ci.yml`. At minimum: unit tests for `mentions.ts`, `types.ts`, `cards.ts`, `streaming-message.ts`, `db.ts`; one end-to-end integration test mocking Bot Framework + Graph.
 - [ ] Run `pnpm build` end-to-end after extraction (this skeleton was authored without running `tsc` since its deps live outside the openclaw lockfile).

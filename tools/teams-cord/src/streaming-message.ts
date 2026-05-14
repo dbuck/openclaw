@@ -4,7 +4,14 @@ import type { ConversationReference, OutboundActivity, TeamsCredentials } from "
 
 const log = logger("streaming-message");
 
-const DEFAULT_DEBOUNCE_MS = 800;
+// Teams rate-limits per-activity edits at roughly 1 update/second. extensions/msteams'
+// TeamsHttpStream uses 1500 ms to stay clear of the limit; we match it. Note this
+// helper uses plain `updateActivity` REST calls rather than Teams' first-class
+// streaming protocol (`streaminfo` entities with `streamId` + `streamSequence`,
+// see extensions/msteams/src/streaming-message.ts). Edits work but render with
+// an "Edited" badge instead of a smooth stream, and there is no server-side
+// 45 s expiry to worry about. Promoting to streaminfo is a future enhancement.
+const DEFAULT_DEBOUNCE_MS = 1500;
 const PLACEHOLDER = "_…thinking_";
 
 export type StreamingTeamsMessageOptions = {

@@ -47,6 +47,8 @@ If you ever need to talk to a different conversation, the bot must already have 
 
 The worker streams your stdout (`--output-format stream-json`) and posts assistant text to Teams as it arrives, editing a single message in place. You don't need to call `/v1/send` for every chunk — just emit text from your run and the worker handles the placeholder + debounced `updateActivity` calls. Use `/v1/send` for *additional* messages (status pings, separate replies), not for incremental rendering of your main answer.
 
+The current implementation uses plain `updateActivity` edits (debounced to 1500 ms). Each update will render with an "Edited" badge rather than as Teams' native streaming UX, which requires the first-class `streaminfo` protocol (`streamType: streaming/final`, `streamId`, `streamSequence`) — that promotion is on the open TODO list.
+
 ## Button submissions
 
 When the user clicks an `Action.Submit` button on a card you posted via `/v1/buttons`, teams-cord enqueues a follow-up turn in the same Claude session with a synthesized prompt of the form:

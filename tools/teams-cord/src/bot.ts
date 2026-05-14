@@ -53,12 +53,22 @@ export async function startBot(cfg: Config = loadConfig()): Promise<StartedBot> 
     }
 
     const activity = req.body as Activity;
-    const isInvoke = activity?.type === "invoke";
-    if (isInvoke) {
-      // Adaptive Card Action.Execute arrives as `invoke`. Reply 200 with an
-      // empty body so Teams treats it as handled; the actual follow-up job
-      // is queued asynchronously below.
-      res.status(200).json({ statusCode: 200, type: "application/vnd.microsoft.activity.message", value: {} });
+    if (activity?.type === "invoke") {
+      // For Adaptive Card Action.Execute (`name: "adaptiveCard/action"`) the
+      // client expects a structured invoke response so the card refresh
+      // completes. Other invoke names (signin, file consent, messaging
+      // extensions) need their own response shapes — until those are
+      // implemented, ack with a bare 200 so we don't return a misleading
+      // adaptive-card response for an unrelated invoke.
+      if (getInvokeName(activity) === "adaptiveCard/action") {
+        res.status(200).json({
+          statusCode: 200,
+          type: "application/vnd.microsoft.activity.message",
+          value: {},
+        });
+      } else {
+        res.status(200).send();
+      }
     } else {
       res.status(200).send();
     }
