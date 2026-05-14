@@ -23,17 +23,39 @@ The matching CLI is `teams-cord <subcommand>` — it's a thin wrapper over the H
 | Result includes a file | `POST /v1/file` (uploads via Graph, posts a link). |
 | Result is rich (titled, colored) | `POST /v1/embed` with `title` + `color`. |
 | Need user choice | `POST /v1/buttons` and wait for `Action.Submit`. |
-| Long task, want a placeholder you'll edit | First `POST /v1/send`, capture the `id`, then `PATCH /v1/messages/:id`. |
+| Long task, want a placeholder you'll edit | The worker already does this for your final reply (streamed via `--output-format stream-json` + debounced `updateActivity`). Only use the manual pattern for *additional* messages: `POST /v1/send`, capture the `id`, then `PATCH /v1/messages/:id`. |
 
-## Conversation id
+## Conversation id and environment
 
-Every API call needs the Bot Framework conversation id — the `19:...@thread.v2` / `19:...@unq.gbl.spaces` string. teams-cord exports it to your environment as `TEAMS_CORD_CONVERSATION_ID` when it spawns you.
+teams-cord exports the following env vars to your subprocess:
+
+| Variable | Meaning |
+| --- | --- |
+| `TEAMS_CORD_CONVERSATION_ID` | Bot Framework conversation id (`19:...@thread.v2` / `19:...@unq.gbl.spaces`). |
+| `TEAMS_CORD_HTTP_URL` | Base URL of the local HTTP API (e.g. `http://127.0.0.1:2644`). |
+| `TEAMS_CORD_WORKING_DIR` | The resolved working directory you were spawned in. |
+| `TEAMS_CORD_FROM_USER` | Display name of the user who triggered this turn (when known). |
+| `TEAMS_CORD_INBOUND_ACTIVITY_ID` | Activity id of the inbound Teams message (use for reply threading). |
 
 ```sh
 echo "$TEAMS_CORD_CONVERSATION_ID"  # e.g. 19:aaaa@thread.v2
 ```
 
-If you ever need to talk to a different conversation, you must already have a stored conversation reference (e.g. the user has @-mentioned the bot there at least once).
+If you ever need to talk to a different conversation, the bot must already have seen activity there (so we have a stored `ConversationReference`).
+
+## Streaming
+
+The worker streams your stdout (`--output-format stream-json`) and posts assistant text to Teams as it arrives, editing a single message in place. You don't need to call `/v1/send` for every chunk — just emit text from your run and the worker handles the placeholder + debounced `updateActivity` calls. Use `/v1/send` for *additional* messages (status pings, separate replies), not for incremental rendering of your main answer.
+
+## Button submissions
+
+When the user clicks an `Action.Submit` button on a card you posted via `/v1/buttons`, teams-cord enqueues a follow-up turn in the same Claude session with a synthesized prompt of the form:
+
+```
+[button-submit] id="yes"
+```
+
+You will see this as the user's next message. Treat it as the user's response to the choice you offered. The same `TEAMS_CORD_INBOUND_ACTIVITY_ID` env var will reference the invoke/message activity for the click.
 
 ## CLI examples
 

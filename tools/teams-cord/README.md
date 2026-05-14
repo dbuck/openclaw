@@ -124,14 +124,26 @@ Only the conversation-to-session mapping and per-conversation config are persist
 
 ## Status / TODO
 
-This repo started as an extraction of the OpenClaw `msteams` plugin and was decoupled from the OpenClaw plugin SDK. The skeleton compiles and the cord-equivalent shape is in place. Before production:
+This repo started as an extraction of the OpenClaw `msteams` plugin and was decoupled from the OpenClaw plugin SDK. The skeleton compiles and the cord-equivalent shape is in place.
 
-- [ ] Implement full JWT validation in `src/teams/jwt.ts` (currently accepts on app-id match only).
-- [ ] Wire `src/teams/attachments.ts` to actually upload via Graph upload sessions.
-- [ ] Stream Claude stdout chunk-wise instead of waiting for run completion.
-- [ ] Replay an existing `session_id` via `claude --resume` rather than spawning fresh per turn.
-- [ ] Add adaptive-card builders for `embed` and `buttons`.
-- [ ] Add CI workflow and tests.
+Already wired end-to-end:
+
+- [x] Full Bot Framework JWT validation (`src/teams/jwt.ts`): multi-issuer JWKS (Bot Framework + Entra v2 + sts.windows.net), audience + `appid`/`azp` check.
+- [x] Graph upload-session attachments (`src/teams/attachments.ts`).
+- [x] `claude --resume` per conversation (`src/worker.ts`).
+- [x] Adaptive-card embed/buttons (`src/cards.ts`).
+- [x] Streaming Claude output: spawner uses `--output-format stream-json` and a `StreamingTeamsMessage` debounces `updateActivity` so the user sees the reply grow as Claude generates it.
+- [x] Adaptive-card `Action.Submit` round-trip: button clicks are routed back into the same Claude session as a synthesized `[button-submit] key=value` prompt.
+- [x] Spawned `claude` subprocess inherits `TEAMS_CORD_CONVERSATION_ID`, `TEAMS_CORD_HTTP_URL`, `TEAMS_CORD_WORKING_DIR`, `TEAMS_CORD_FROM_USER`, `TEAMS_CORD_INBOUND_ACTIVITY_ID` so the SKILL can drive the local HTTP API directly.
+- [x] Outbound @-mentions: bot/worker replies pass `entities` so Teams renders an @-pill back at the originating user (`buildOutboundMentions` in `src/teams/mentions.ts`).
+
+Before production:
+
+- [ ] File-consent invoke handshake for personal-scope (1:1) DM uploads — channel-scope works as-is.
+- [ ] Split BullMQ Queue / Worker `IORedis` connections (`maxRetriesPerRequest: null` only needs to be set on the worker side).
+- [ ] Tests + `.github/workflows/ci.yml`. At minimum: unit tests for `mentions.ts`, `types.ts`, `cards.ts`, `streaming-message.ts`, `db.ts`; one end-to-end integration test mocking Bot Framework + Graph.
+- [ ] Run `pnpm build` end-to-end after extraction (this skeleton was authored without running `tsc` since its deps live outside the openclaw lockfile).
+- [ ] License audit: `src/teams/*` is derived from `extensions/msteams/` (OpenClaw); confirm Apache-2.0/MIT compatibility and add attribution before publishing.
 
 ## License
 

@@ -1,6 +1,7 @@
 import { Queue } from "bullmq";
 import IORedis from "ioredis";
 import type { Config } from "./config.js";
+import type { OutboundMention } from "./teams/mentions.js";
 
 export const QUEUE_NAME = "teams-cord:claude";
 
@@ -14,6 +15,8 @@ export type ClaudeJob = {
   fromUser?: string;
   /** Activity id for the inbound message (used for reply threading). */
   inboundActivityId?: string;
+  /** Mention to attach to outbound replies (typically the user who triggered the turn). */
+  replyMention?: OutboundMention;
 };
 
 export type ClaudeJobResult = {

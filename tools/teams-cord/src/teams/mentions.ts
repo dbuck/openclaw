@@ -43,3 +43,46 @@ export function extractBotMention(activity: Activity, botAppId: string): Mention
     workingDirOverride,
   };
 }
+
+export type OutboundMention = {
+  /** Teams user id of the person being mentioned (typically `29:...` or AAD object id). */
+  userId: string;
+  /** Display name to render inside the `<at>...</at>` markup. */
+  name: string;
+};
+
+export type MentionDecoration = {
+  /** Prefix to prepend to the message body so the @-pill renders. */
+  textPrefix: string;
+  /** Entities to attach to the outbound activity. */
+  entities: Array<{ type: "mention"; text: string; mentioned: { id: string; name: string } }>;
+};
+
+/**
+ * Build the `text` prefix and `entities` array required for Teams to render
+ * an @-mention pill on an outbound message. Teams won't render a pill unless
+ * the message text contains the exact `<at>display</at>` literal and there
+ * is a matching `mention` entity for it.
+ */
+export function buildOutboundMentions(mentions: OutboundMention[]): MentionDecoration {
+  if (mentions.length === 0) return { textPrefix: "", entities: [] };
+  const parts: string[] = [];
+  const entities = mentions.map((m) => {
+    const safeName = escapeForMentionText(m.name);
+    const tag = `<at>${safeName}</at>`;
+    parts.push(tag);
+    return {
+      type: "mention" as const,
+      text: tag,
+      mentioned: { id: m.userId, name: m.name },
+    };
+  });
+  return { textPrefix: `${parts.join(" ")} `, entities };
+}
+
+function escapeForMentionText(name: string): string {
+  // Teams accepts most characters inside <at>, but raw `<`/`>` would break
+  // the tag boundary. Strip them defensively; the resulting display name
+  // still resolves to the AAD identity in `mentioned.id`.
+  return name.replace(/[<>]/g, "").trim() || "user";
+}

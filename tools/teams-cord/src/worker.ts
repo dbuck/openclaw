@@ -5,8 +5,11 @@ import { loadConfig, isPathAllowed } from "./config.js";
 import { logger } from "./log.js";
 import { ThreadStore } from "./db.js";
 import { QUEUE_NAME, createRedis, type ClaudeJob, type ClaudeJobResult } from "./queue.js";
-import { spawnClaude } from "./spawner.js";
+import { spawnClaude, type ClaudeEvent } from "./spawner.js";
+import { StreamingTeamsMessage } from "./streaming-message.js";
 import { sendActivity } from "./teams/send.js";
+import { buildOutboundMentions, type OutboundMention } from "./teams/mentions.js";
+import type { OutboundActivity } from "./teams/types.js";
 
 const log = logger("worker");
 
@@ -37,15 +40,29 @@ async function processJob(
     return { ok: false, error: `No conversation reference stored for ${job.conversationId}` };
   }
 
+  const replyMentions: OutboundMention[] = job.replyMention
+    ? [job.replyMention]
+    : reference.user?.id && reference.user.name
+      ? [{ userId: reference.user.id, name: reference.user.name }]
+      : [];
+
+  const buildActivity = (text: string): OutboundActivity => {
+    const decoration = buildOutboundMentions(replyMentions);
+    return {
+      type: "message",
+      text: decoration.textPrefix + text,
+      entities: decoration.entities.length > 0 ? decoration.entities : undefined,
+    };
+  };
+
   const workingDir = resolveWorkingDir(cfg, store, job);
   if (!workingDir) {
     await sendActivity({
       creds: cfg.creds,
       reference,
-      activity: {
-        type: "message",
-        text: "No working directory configured. Use `/cord config dir <path>` or `[/path]` inline.",
-      },
+      activity: buildActivity(
+        "No working directory configured. Use `teams-cord config dir <path>` or `[/path]` inline.",
+      ),
     });
     return { ok: false, error: "no working_dir" };
   }
@@ -54,30 +71,72 @@ async function processJob(
     await sendActivity({
       creds: cfg.creds,
       reference,
-      activity: { type: "message", text: `Working directory \`${workingDir}\` is not on the allowlist.` },
+      activity: buildActivity(`Working directory \`${workingDir}\` is not on the allowlist.`),
     });
     return { ok: false, error: "working_dir not allowed" };
   }
 
   const resumeSessionId = store.getSession(job.conversationId) ?? undefined;
-  const result = await spawnClaude({
-    cfg,
-    prompt: buildPrompt(job),
-    workingDir,
-    resumeSessionId,
+  const stream = new StreamingTeamsMessage({
+    creds: cfg.creds,
+    reference,
+    buildActivity,
   });
+
+  const extraEnv = buildSpawnEnv(cfg, job, workingDir);
+  const onEvent = (event: ClaudeEvent) => handleEvent(event, stream);
+
+  let result;
+  try {
+    result = await spawnClaude({
+      cfg,
+      prompt: buildPrompt(job),
+      workingDir,
+      resumeSessionId,
+      extraEnv,
+      onEvent,
+    });
+  } catch (err) {
+    log.error("spawn failed", { err: (err as Error).message });
+    await stream.finalize(`Error spawning claude: ${(err as Error).message}`);
+    return { ok: false, error: (err as Error).message };
+  }
 
   if (result.sessionId && result.sessionId !== resumeSessionId) {
     store.setSession(job.conversationId, result.sessionId);
   }
 
-  const posted = await sendActivity({
-    creds: cfg.creds,
-    reference,
-    activity: { type: "message", text: result.text || "(Claude returned no text.)" },
-  });
+  const finalText = result.text || (result.isError ? "(Claude reported an error.)" : "(Claude returned no text.)");
+  const postedActivityId = await stream.finalize(finalText);
 
-  return { ok: true, sessionId: result.sessionId, postedActivityId: posted.id };
+  return {
+    ok: !result.isError && result.exitCode === 0,
+    sessionId: result.sessionId,
+    postedActivityId: postedActivityId ?? undefined,
+    error: result.isError ? "claude reported is_error" : undefined,
+  };
+}
+
+function handleEvent(event: ClaudeEvent, stream: StreamingTeamsMessage): void {
+  if (event.type !== "assistant") return;
+  const message = (event as { message?: { content?: Array<{ type: string; text?: string }> } }).message;
+  if (!message?.content) return;
+  for (const block of message.content) {
+    if (block.type === "text" && typeof block.text === "string" && block.text.length > 0) {
+      // Fire-and-forget; the streamer handles its own ordering.
+      stream.appendText(block.text).catch((err) => log.warn("appendText failed", { err: err.message }));
+    }
+  }
+}
+
+function buildSpawnEnv(cfg: Config, job: ClaudeJob, workingDir: string): Record<string, string> {
+  return {
+    TEAMS_CORD_CONVERSATION_ID: job.conversationId,
+    TEAMS_CORD_HTTP_URL: `http://${cfg.http.host}:${cfg.http.port}`,
+    TEAMS_CORD_WORKING_DIR: workingDir,
+    ...(job.fromUser ? { TEAMS_CORD_FROM_USER: job.fromUser } : {}),
+    ...(job.inboundActivityId ? { TEAMS_CORD_INBOUND_ACTIVITY_ID: job.inboundActivityId } : {}),
+  };
 }
 
 function resolveWorkingDir(cfg: Config, store: ThreadStore, job: ClaudeJob): string | null {

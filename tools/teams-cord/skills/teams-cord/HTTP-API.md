@@ -54,7 +54,7 @@ Body:
 
 ### `POST /v1/buttons`
 
-Post a card with `Action.Submit` buttons. The bot receives an `invoke` activity when the user clicks; the worker doesn't yet route those back into the same job (TODO).
+Post a card with `Action.Submit` buttons. When the user clicks, the bot receives a `message` activity with empty `text` and a `value` payload (or, for `Action.Execute`, an `invoke` with `name: "adaptiveCard/action"`). teams-cord enqueues a follow-up turn in the same Claude session with the synthesized prompt `[button-submit] key="value" ...`.
 
 Body:
 
@@ -140,4 +140,3 @@ All non-2xx responses use:
 
 - Authenticate the local API (optional shared-secret header) if exposing beyond localhost.
 - Stream Claude stdout chunks via SSE for `/v1/send` consumers that want incremental updates.
-- Wire `Action.Submit` button presses back to the worker as follow-up jobs in the same Claude session.

@@ -51,6 +51,12 @@ export type OutboundActivity = {
   attachments?: Array<{ contentType: string; content?: unknown; contentUrl?: string; name?: string }>;
   channelData?: Record<string, unknown>;
   replyToId?: string;
+  /**
+   * Mention entities to attach to the activity. The message `text` must
+   * contain the matching `<at>name</at>` literal for Teams to render the
+   * @-pill. Use `buildOutboundMentions` from `./mentions.ts` to construct.
+   */
+  entities?: Array<{ type: string; text?: string; mentioned?: { id: string; name: string } }>;
 };
 
 export function activityToReference(activity: Activity): ConversationReference {
